@@ -271,6 +271,24 @@ idle(info, {init_callback, CBOptions},
     {ok, NewCBState} = callback(CB, init, [Streams, StreamId], [Socket | CBOptions]),
     {next_state, idle, Stream#stream_state{callback_state = NewCBState}};
 
+%% Client: the peer can answer before we've seen our own 'SEND H'.
+%% The connection process writes our HEADERS frame to the socket and
+%% only then casts send_h to us, while the peer's frames reach us from
+%% the separate reader process. A fast peer's response HEADERS (and the
+%% DATA/END_STREAM behind them) can therefore arrive while we're still
+%% idle -- where recv_h is the server's 'RECV H', so the response fails
+%% request validation and we reset a healthy stream. DATA queued by a
+%% sender racing send_h would likewise fall through to handle_info and
+%% be dropped. Hold all of it until send_h moves us to open.
+idle(cast, {recv_h, _}, #stream_state{type=client}) ->
+    {keep_state_and_data, [postpone]};
+idle(cast, {recv_data, _}, #stream_state{type=client}) ->
+    {keep_state_and_data, [postpone]};
+idle(cast, recv_es, #stream_state{type=client}) ->
+    {keep_state_and_data, [postpone]};
+idle(cast, {send_data, _}, #stream_state{type=client}) ->
+    {keep_state_and_data, [postpone]};
+
 %% Server 'RECV H'
 idle(cast, {recv_h, Headers},
      #stream_state{
