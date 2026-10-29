@@ -124,7 +124,7 @@ start_link(StreamId, Streams, Connection, CallbackModule, CallbackOptions) ->
                            Connection,
                            CallbackModule,
                            CallbackOptions],
-                          []).
+                          [{hibernate_after, 10000}]).
 
 
 -spec start(
@@ -143,7 +143,7 @@ start(StreamId, Streams, Connection, CallbackModule, CallbackOptions) ->
                            Connection,
                            CallbackModule,
                            CallbackOptions],
-                          []).
+                          [{hibernate_after, 10000}]).
 
 send_event(Pid, Event) ->
     gen_statem:cast(Pid, Event).
@@ -835,6 +835,8 @@ handle_event({call, From}, Event, State=#stream_state{callback_mod=CB,
 handle_event(cast, {rst_stream, ErrorCode}, State=#stream_state{}) ->
     rst_stream_(ErrorCode, State);
 handle_event(info, {'DOWN', _Ref, process, Pid, Reason}, #stream_state{connection=Pid}) ->
+    {stop, Reason};
+handle_event(info, {'EXIT', Pid, Reason}, #stream_state{connection=Pid}) ->
     {stop, Reason};
 handle_event(cast, Event, State=#stream_state{callback_mod=CB,
                                               callback_state=CallbackState}) when CB /= undefined ->
